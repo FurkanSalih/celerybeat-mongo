@@ -43,12 +43,12 @@ create the interval object::
     app = Celery('hello', broker='redis://localhost//')
     app.conf.update(**config)
 
-    from celerybeatmongo.models import PeriodicTask, Interval
+    from celerybeatmongo.models import PeriodicTask
 
     periodic = PeriodicTask(
         name='Importing contacts',
         task="proj.import_contacts"
-        interval=Interval(every=10, period="seconds") # executes every 10 seconds.
+        interval=PeriodicTask.Interval(every=10, period="seconds") # executes every 10 seconds.
     )
     periodic.save()
 

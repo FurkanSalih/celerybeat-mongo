@@ -4,15 +4,15 @@
 # use this file except in compliance with the License. You may obtain a copy
 # of the License at http://www.apache.org/licenses/LICENSE-2.0
 
-import mongoengine
-import traceback
 import datetime
+import traceback
 
-from celery import schedules
-from celerybeatmongo.models import PeriodicTask
-from celery.beat import Scheduler, ScheduleEntry
+import mongoengine
+from celery import current_app, schedules
+from celery.beat import ScheduleEntry, Scheduler
 from celery.utils.log import get_logger
-from celery import current_app
+from celerybeatmongo.models import PeriodicTask
+from mongoengine.queryset.visitor import Q
 
 
 logger = get_logger(__name__)
@@ -156,10 +156,15 @@ class MongoScheduler(Scheduler):
 
     def get_from_database(self):
         self.sync()
-        d = {}
-        for doc in self.Model.objects.filter(enabled=True):
-            d[doc.name] = self.Entry(doc)
-        return d
+        now = datetime.datetime.now()
+        docs = self.Model.objects.filter(
+            Q(enabled=True)
+            & (Q(start_after=None) | Q(start_after__lte=now)),
+        )
+        return {
+            doc.name: self.Entry(doc)
+            for doc in docs
+        }
 
     @property
     def schedule(self):
