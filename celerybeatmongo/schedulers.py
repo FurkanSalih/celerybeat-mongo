@@ -11,8 +11,9 @@ import mongoengine
 from celery import current_app, schedules
 from celery.beat import ScheduleEntry, Scheduler
 from celery.utils.log import get_logger
-from celerybeatmongo.models import PeriodicTask
 from mongoengine.queryset.visitor import Q
+
+from celerybeatmongo.models import PeriodicTask
 
 
 logger = get_logger(__name__)
@@ -60,9 +61,11 @@ class MongoScheduleEntry(ScheduleEntry):
 
     def is_due(self):
         if not self._task.enabled:
-            return schedules.schedstate(False, 5.0)   # 5 second delay for re-enable.
+            # 5 second delay for re-enable.
+            return schedules.schedstate(False, 5.0)
         if hasattr(self._task, 'start_after') and self._task.start_after:
-            if datetime.datetime.now() < self._task.start_after:
+            start_after = self.app.timezone.localize(self._task.start_after)
+            if self._default_now() < start_after:
                 return schedules.schedstate(False, 5.0)
         if hasattr(self._task, 'max_run_count') and self._task.max_run_count:
             if (self._task.total_run_count or 0) >= self._task.max_run_count:
@@ -90,7 +93,8 @@ class MongoScheduleEntry(ScheduleEntry):
     def save(self):
         if self.total_run_count > self._task.total_run_count:
             self._task.total_run_count = self.total_run_count
-        if self.last_run_at and self._task.last_run_at and self.last_run_at > self._task.last_run_at:
+        if (self.last_run_at and self._task.last_run_at
+                and self.last_run_at > self._task.last_run_at):
             self._task.last_run_at = self.last_run_at
         self._task.run_immediately = False
         try:
@@ -152,11 +156,11 @@ class MongoScheduler(Scheduler):
         from the backend database"""
         if not self._last_updated:
             return True
-        return self._last_updated + self.UPDATE_INTERVAL < datetime.datetime.now()
+        return self._last_updated + self.UPDATE_INTERVAL < self.app.now()
 
     def get_from_database(self):
         self.sync()
-        now = datetime.datetime.now()
+        now = self.app.now()
         docs = self.Model.objects.filter(
             Q(enabled=True)
             & (Q(start_after=None) | Q(start_after__lte=now)),
@@ -170,7 +174,7 @@ class MongoScheduler(Scheduler):
     def schedule(self):
         if self.requires_update():
             self._schedule = self.get_from_database()
-            self._last_updated = datetime.datetime.now()
+            self._last_updated = self.app.now()
         return self._schedule
 
     def sync(self):
