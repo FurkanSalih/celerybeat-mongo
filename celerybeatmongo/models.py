@@ -96,7 +96,7 @@ class PeriodicTask(DynamicDocument):
     routing_key = StringField()
     soft_time_limit = IntField()
 
-    expires = IntField(min_value=0, default=0)
+    expires = IntField(min_value=0, default=None)
     start_after = DateTimeField()
     enabled = BooleanField(default=True)
 
